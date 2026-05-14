@@ -1,0 +1,29 @@
+# Built artifacts
+build/
+app/build/
+*.apk
+*.aab
+*.aar
+
+# Gradle
+.gradle/
+gradle-wrapper.jar
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore / signing (never commit these)
+*.jks
+*.keystore
+*.pk8
+*.p12
+
+# OS
+.DS_Store
+Thumbs.db
