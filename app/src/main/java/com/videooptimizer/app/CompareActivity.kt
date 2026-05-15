@@ -17,10 +17,12 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
@@ -184,42 +186,18 @@ class CompareActivity : AppCompatActivity() {
     }
 
     private fun seekBothAndResume(seekTo: Long) {
-        val players = listOfNotNull(playerOriginal, playerExported)
-        var confirmedCount = 0
-
-        // Defined first so listener can reference it via resume.run()
-        val resume = object : Runnable {
-            var seekListener: Player.Listener? = null
-            override fun run() {
-                seekListener?.let { l -> players.forEach { p -> p.removeListener(l) } }
-                progressHandler.removeCallbacks(this)
-                isSeeking = false
-                if (seekWasPlaying) {
-                    isPlaying = true
-                    playerOriginal?.play()
-                    playerExported?.play()
-                    progressHandler.post(progressRunnable)
-                }
-            }
-        }
-
-        val seekListener = object : Player.Listener {
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int
-            ) {
-                if (reason != Player.DISCONTINUITY_REASON_SEEK) return
-                confirmedCount++
-                if (confirmedCount >= players.size) resume.run()
-            }
-        }
-        resume.seekListener = seekListener
-
-        progressHandler.postDelayed(resume, 800)   // safety timeout
-        players.forEach { it.addListener(seekListener) }
         playerOriginal?.seekTo(seekTo)
         playerExported?.seekTo(seekTo)
+        // Wait 300ms for both players to buffer to the new position before resuming
+        progressHandler.postDelayed({
+            isSeeking = false
+            if (seekWasPlaying) {
+                isPlaying = true
+                playerOriginal?.play()
+                playerExported?.play()
+                progressHandler.post(progressRunnable)
+            }
+        }, 300)
     }
 
     private fun updateSeekBar() {
@@ -238,7 +216,7 @@ class CompareActivity : AppCompatActivity() {
         })
 
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
                 togglePlayback()
                 return true
             }
@@ -290,7 +268,10 @@ class CompareActivity : AppCompatActivity() {
     }
 
     private fun togglePlayback() {
-        if (isPlaying) {
+        if (isSeeking) return  // ignore taps during seek delay
+        // Use actual player state as source of truth — isPlaying flag can drift
+        val playing = playerOriginal?.isPlaying == true
+        if (playing) {
             playerOriginal?.pause()
             playerExported?.pause()
             isPlaying = false
@@ -306,10 +287,34 @@ class CompareActivity : AppCompatActivity() {
     }
 
     private fun buildPlayer(view: PlayerView, uriString: String, prepare: Boolean, mute: Boolean): ExoPlayer? {
+        // Verify URI is still accessible before building a player for it
+        if (!mute) {
+            try {
+                val uri = Uri.parse(uriString)
+                contentResolver.openFileDescriptor(uri, "r")?.close()
+            } catch (e: Exception) {
+                Log.e(TAG, "Original URI not accessible: $e")
+                runOnUiThread {
+                    Toast.makeText(this, "Original video no longer accessible.\nRe-export to use Compare.", Toast.LENGTH_LONG).show()
+                    finish()
+                }
+                return null
+            }
+        }
+
         return try {
-            ExoPlayer.Builder(this).build().also { exo ->
+            val builder = if (mute) {
+                // Fully disable audio renderer — avoids codec errors on muted player
+                val trackSelector = DefaultTrackSelector(this).apply {
+                    setParameters(buildUponParameters().setRendererDisabled(C.TRACK_TYPE_AUDIO, true))
+                }
+                ExoPlayer.Builder(this).setTrackSelector(trackSelector)
+            } else {
+                ExoPlayer.Builder(this)
+            }
+
+            builder.build().also { exo ->
                 view.player = exo
-                if (mute) exo.volume = 0f
                 exo.addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
                         Log.e(TAG, "Player error [$uriString]: ${error.message}")

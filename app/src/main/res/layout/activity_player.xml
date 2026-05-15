@@ -11,21 +11,13 @@
         android:layout_height="match_parent"
         app:use_controller="false" />
 
-    <!-- Tap anywhere to play/pause (below bottom controls so seek bar still gets touches) -->
-    <View
-        android:id="@+id/tap_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/transparent" />
-
-    <!-- Bottom seek bar controls -->
+    <!-- Bottom seek bar — dispatchTouchEvent in Activity handles tap-to-play above this -->
     <LinearLayout
         android:id="@+id/bottom_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:background="#CC000000"
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp">
 

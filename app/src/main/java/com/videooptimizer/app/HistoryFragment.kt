@@ -63,6 +63,7 @@ class HistoryFragment : Fragment() {
     }
 
     fun addSharedVideo(uri: Uri) {
+        if (!isAdded) return
         addToHistory(uri)
     }
 

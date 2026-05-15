@@ -4,6 +4,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
@@ -11,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import kotlin.math.abs
 
 class PlayerActivity : AppCompatActivity() {
 
@@ -24,6 +27,11 @@ class PlayerActivity : AppCompatActivity() {
             progressHandler.postDelayed(this, 250)
         }
     }
+
+    // Tap detection for dispatchTouchEvent
+    private var tapDownX = 0f
+    private var tapDownY = 0f
+    private var tapPointerCount = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,7 +55,6 @@ class PlayerActivity : AppCompatActivity() {
         })
 
         val playerView = findViewById<PlayerView>(R.id.player_view)
-
         player = ExoPlayer.Builder(this).build().also { exo ->
             playerView.player = exo
             exo.addListener(object : Player.Listener {
@@ -68,12 +75,33 @@ class PlayerActivity : AppCompatActivity() {
             exo.prepare()
             exo.playWhenReady = true
         }
+    }
 
-        // Tap anywhere on the video = toggle play/pause
-        findViewById<android.view.View>(R.id.tap_overlay).setOnClickListener {
-            val exo = player ?: return@setOnClickListener
-            if (exo.isPlaying) exo.pause() else exo.play()
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tapDownX = ev.rawX
+                tapDownY = ev.rawY
+                tapPointerCount = 1
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> tapPointerCount++
+            MotionEvent.ACTION_UP -> {
+                if (tapPointerCount == 1) {
+                    val moved = abs(ev.rawX - tapDownX) > 20 || abs(ev.rawY - tapDownY) > 20
+                    if (!moved && !isTouchInControls(ev.rawY)) {
+                        player?.let { if (it.isPlaying) it.pause() else it.play() }
+                    }
+                }
+            }
         }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun isTouchInControls(rawY: Float): Boolean {
+        val controls = findViewById<View>(R.id.bottom_controls) ?: return false
+        val loc = IntArray(2)
+        controls.getLocationOnScreen(loc)
+        return rawY >= loc[1]
     }
 
     private fun updateSeekBar() {

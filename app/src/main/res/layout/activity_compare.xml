@@ -124,6 +124,8 @@
         android:id="@+id/gesture_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clickable="true"
+        android:focusable="true"
         android:background="@android:color/transparent" />
 
     <!-- SeekBar at bottom, no background — floats over video -->
